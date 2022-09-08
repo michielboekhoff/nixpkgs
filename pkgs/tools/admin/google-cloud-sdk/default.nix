@@ -7,7 +7,22 @@
 #   3) used by `google-cloud-sdk` only on GCE guests
 #
 
-{ stdenv, lib, fetchurl, makeWrapper, nixosTests, python, openssl, jq, callPackage, with-gce ? false, with-numpy ? false }:
+{ stdenv, 
+  lib, 
+  fetchurl, 
+  makeWrapper, 
+  nixosTests, 
+  python, 
+  openssl, 
+  jq, 
+  callPackage, 
+  python3Packages,
+  with-gce ? false, 
+  with-numpy ? false, pythonPackages ? python3Packages
+}:
+
+# This is just for backwards-compat possibly? Can we just replace this in the top-level?
+assert with-numpy -> pythonPackages != null;
 
 let
   pythonEnv = python.withPackages (p: with p; [
@@ -34,6 +49,8 @@ in stdenv.mkDerivation rec {
   src = fetchurl (sources stdenv.hostPlatform.system);
 
   buildInputs = [ python ];
+
+  propagatedBuildInput = lib.optional (with-numpy) pythonPackages.numpy;
 
   nativeBuildInputs = [ jq makeWrapper ];
 

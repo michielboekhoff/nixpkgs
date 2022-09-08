@@ -7213,6 +7213,7 @@ with pkgs;
 
   google-cloud-sdk = callPackage ../tools/admin/google-cloud-sdk {
     python = python3;
+    pythonPackages = python3Packages;
   };
   google-cloud-sdk-gce = google-cloud-sdk.override {
     python = python38;
