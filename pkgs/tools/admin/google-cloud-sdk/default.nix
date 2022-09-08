@@ -48,9 +48,7 @@ in stdenv.mkDerivation rec {
 
   src = fetchurl (sources stdenv.hostPlatform.system);
 
-  buildInputs = [ python ];
-
-  propagatedBuildInput = lib.optional (with-numpy) pythonPackages.numpy;
+  buildInputs = [ python ] ++ lib.optional (with-numpy) pythonPackages.numpy;
 
   nativeBuildInputs = [ jq makeWrapper ];
 
