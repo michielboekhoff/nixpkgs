@@ -1,46 +1,40 @@
 { stdenv
 , lib
 , config
-, fetchurl
-, unzip
-, makeWrapper
+, fetchFromGitHub
 , icu
 , libunwind
 , curl
 , zlib
 , libuuid
-, dotnetbuildhelpers
 , dotnetCorePackages
 , openssl
-}:
+, buildDotnetModule
+, bash
+, buildGoModule
+}@pkgs:
 
-stdenv.mkDerivation rec {
+let gozip = (import ./gozip.nix { inherit (pkgs) buildGoModule fetchFromGitHub; });
+in buildDotnetModule rec {
   pname = "azure-functions-core-tools";
   version = "4.0.4785";
 
-  src =
-    if stdenv.isLinux then
-      fetchurl {
-        url = "https://github.com/Azure/${pname}/releases/download/${version}/Azure.Functions.Cli.linux-x64.${version}.zip";
-        sha256 = "sha256-SWvbPEslwhYNd2fTQJWy1+823o1vJR/roPstgelSfnQ=";
-      }
-    else
-      fetchurl {
-        url = "https://github.com/Azure/${pname}/releases/download/${version}/Azure.Functions.Cli.osx-x64.${version}.zip";
-        sha256 = "sha256-m06XeUHVDCxo7sfK4eF1oM6IuaVET9jr/xSO9qzpxSU=";
-      }
-    ;
+  src = fetchFromGitHub {
+    owner = "Azure";
+    repo = "azure-functions-core-tools";
+    rev = "refs/tags/${version}";
+    sha256 = "sha256-XkoJYP05JgOmKUdI1fthLVdJuOryvN61hjpGosre2Oo=";
+  };
 
-  nativeBuildInputs = [
-    unzip
-    makeWrapper
-    dotnetbuildhelpers
-    icu
-    libunwind
-    curl
-    zlib
-    dotnetCorePackages.sdk_3_1
-  ];
+  projectFile = "src/Azure.Functions.Cli/Azure.Functions.Cli.csproj";
+  nugetDeps = ./deps.nix;
+  dotnet-sdk = dotnetCorePackages.sdk_6_0;
+  dotnet-runtime =
+    (with dotnetCorePackages; combinePackages [ runtime_6_0 aspnetcore_6_0 ]);
+  # TODO this needs to be updated for Darwin
+  dotnetFlags = [ "--runtime linux-x64" ];
+
+  buildInputs = [ bash gozip ];
 
   libPath = lib.makeLibraryPath [
     libunwind
@@ -52,33 +46,20 @@ stdenv.mkDerivation rec {
     openssl
   ];
 
-  unpackPhase = ''
-    unzip $src
+  executables = [ "func" ];
+
+  prePatch = ''
+    substituteInPlace src/Azure.Functions.Cli/Common/CommandChecker.cs \
+      --replace '/bin/bash' ${bash}/bin/bash
+    substituteInPlace src/Azure.Functions.Cli/Helpers/ZipHelper.cs \
+      --replace 'Assembly.GetExecutingAssembly().Location' \"${gozip}/bin/gozip\"
   '';
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp -prd . $out/bin/azure-functions-core-tools
-    chmod +x $out/bin/azure-functions-core-tools/{func,gozip}
-  '' + lib.optionalString stdenv.isLinux ''
-    patchelf \
-      --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-      --set-rpath "${libPath}" "$out/bin/azure-functions-core-tools/func"
-    find $out/bin/azure-functions-core-tools -type f -name "*.so" -exec patchelf --set-rpath "${libPath}" {} \;
-    wrapProgram "$out/bin/azure-functions-core-tools/func" --prefix LD_LIBRARY_PATH : ${libPath}
-  '' + ''
-    ln -s $out/bin/{azure-functions-core-tools,}/func
-    ln -s $out/bin/{azure-functions-core-tools,}/gozip
-  '';
-  dontStrip = true; # Causes rpath patching to break if not set
-
+  # TODO update the meta section
   meta = with lib; {
     homepage = "https://github.com/Azure/azure-functions-core-tools";
     description = "Command line tools for Azure Functions";
-    sourceProvenance = with sourceTypes; [
-      binaryBytecode
-      binaryNativeCode
-    ];
+    sourceProvenance = with sourceTypes; [ fromSource ];
     license = licenses.mit;
     maintainers = with maintainers; [ ];
     platforms = platforms.unix;
