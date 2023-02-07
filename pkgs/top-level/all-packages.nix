@@ -15192,6 +15192,9 @@ with pkgs;
   jdk19 = openjdk19;
   jdk19_headless = openjdk19_headless;
 
+  openjdk18 = javaPackages.compiler.openjdk18;
+  jdk18 = openjdk18;
+
   /* default JDK */
   jdk = jdk19;
   jdk_headless = jdk19_headless;
